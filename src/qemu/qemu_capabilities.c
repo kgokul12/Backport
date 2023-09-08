@@ -4857,6 +4857,7 @@ virQEMUCapsFormatSEVInfo(virQEMUCaps *qemuCaps, virBuffer *buf)
     virBufferAsprintf(buf, "<cbitpos>%u</cbitpos>\n", sev->cbitpos);
     virBufferAsprintf(buf, "<reducedPhysBits>%u</reducedPhysBits>\n",
                       sev->reduced_phys_bits);
+    virBufferEscapeString(buf, "<userid>%s</userid>\n", sev->user_id);
     virBufferEscapeString(buf, "<pdh>%s</pdh>\n", sev->pdh);
     virBufferEscapeString(buf, "<certChain>%s</certChain>\n",
                           sev->cert_chain);

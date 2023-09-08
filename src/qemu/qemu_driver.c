@@ -18968,6 +18968,10 @@ qemuGetSEVInfoToParams(virQEMUCaps *qemuCaps,
                               sev->max_es_guests) < 0)
         goto cleanup;
 
+    if (virTypedParamsAddString(&sevParams, &n, &maxpar,
+                    VIR_NODE_SEV_USER_ID, sev->user_id) < 0)
+        goto cleanup;
+
     *params = g_steal_pointer(&sevParams);
     *nparams = n;
     return 0;

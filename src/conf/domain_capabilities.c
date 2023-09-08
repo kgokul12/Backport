@@ -654,6 +654,9 @@ virDomainCapsFeatureSEVFormat(virBuffer *buf,
     if (sev->cpu0_id != NULL)
         virBufferAsprintf(buf, "<cpu0Id>%s</cpu0Id>\n", sev->cpu0_id);
 
+    if (sev->user_id != NULL)
+        virBufferAsprintf(buf, "<userid>%s</userid>\n", sev->user_id);
+
     virBufferAdjustIndent(buf, -2);
     virBufferAddLit(buf, "</sev>\n");
 }

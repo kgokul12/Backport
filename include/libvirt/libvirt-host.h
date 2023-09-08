@@ -587,6 +587,15 @@ typedef virNodeMemoryStats *virNodeMemoryStatsPtr;
  */
 # define VIR_NODE_SEV_MAX_ES_GUESTS "max-es-guests"
 
+/**
+ * VIR_NODE_SEV_USER_ID:
+ *
+ * Macro represents the user id string,enable reuse asid feature
+ *
+ * Since: 9.10.0
+ */
+# define VIR_NODE_SEV_USER_ID "user-id"
+
 int virNodeGetSEVInfo (virConnectPtr conn,
                        virTypedParameterPtr *params,
                        int *nparams,

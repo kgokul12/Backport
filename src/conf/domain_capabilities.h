@@ -213,6 +213,7 @@ struct _virSEVCapability {
     unsigned int reduced_phys_bits;
     unsigned int max_guests;
     unsigned int max_es_guests;
+    char *user_id;
 };
 
 typedef struct _virSGXSection virSGXSection;

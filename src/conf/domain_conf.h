@@ -2860,6 +2860,7 @@ struct _virDomainSEVDef {
     bool haveReducedPhysBits;
     unsigned int reduced_phys_bits;
     virTristateBool kernel_hashes;
+    char *user_id;
 };
 
 struct _virDomainSecDef {
