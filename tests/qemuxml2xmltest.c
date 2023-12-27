@@ -343,6 +343,7 @@ mymain(void)
     DO_TEST_CAPS_LATEST("graphics-dbus-chardev");
 
     DO_TEST_CAPS_ARCH_LATEST("default-video-type-aarch64", "aarch64");
+    DO_TEST_CAPS_ARCH_LATEST("default-video-type-loongarch64", "loongarch64");
     DO_TEST_CAPS_ARCH_LATEST("default-video-type-ppc64", "ppc64");
     DO_TEST_CAPS_ARCH_LATEST("default-video-type-riscv64", "riscv64");
     DO_TEST_CAPS_ARCH_LATEST("default-video-type-s390x", "s390x");
@@ -913,6 +914,7 @@ mymain(void)
 
     /* Simple headless guests for various architectures */
     DO_TEST_CAPS_ARCH_LATEST("aarch64-virt-headless", "aarch64");
+    DO_TEST_CAPS_ARCH_LATEST("loongarch64-virt-headless", "loongarch64");
     DO_TEST_CAPS_ARCH_LATEST("ppc64-pseries-headless", "ppc64");
     DO_TEST_CAPS_ARCH_LATEST("riscv64-virt-headless", "riscv64");
     DO_TEST_CAPS_ARCH_LATEST("s390x-ccw-headless", "s390x");
@@ -921,6 +923,7 @@ mymain(void)
 
     /* Simple guests with graphics for various architectures */
     DO_TEST_CAPS_ARCH_LATEST("aarch64-virt-graphics", "aarch64");
+    DO_TEST_CAPS_ARCH_LATEST("loongarch64-virt-graphics", "loongarch64");
     DO_TEST_CAPS_ARCH_LATEST("ppc64-pseries-graphics", "ppc64");
     DO_TEST_CAPS_ARCH_LATEST("riscv64-virt-graphics", "riscv64");
     DO_TEST_CAPS_ARCH_LATEST("s390x-ccw-graphics", "s390x");
