@@ -25,8 +25,8 @@ for text in texts:
 html_content += "</body></html>"
 
 # Write the HTML content to a file
-with open("Commits.html", "w") as file:
+with open("/home/amd/Commits.html", "w") as file:
     file.write(html_content)
 
-print("HTML file with hyperlinks created.")
+print("HTML file with hyperlinks created in /home/amd/Commits.html")
 

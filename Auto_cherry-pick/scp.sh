@@ -47,23 +47,36 @@ done < "$sortfile"
 #trapping signal SIGINT and SIGTERM
 trap clear_cp SIGINT SIGTERM
 
+#set alias for "done"
+ALIAScontinue="alias 'cp continue'='exit 1'"
+ALIASabort="alias 'cp abort'=exit"
+BASHFILE="$HOME/.bashrc"
+
+echo $ALIASLINE >> $BASHFILE
+
 for commit in "${commits[@]}"; do
-    	echo "Applying commit $commit ...."
-    	git cherry-pick -x "$commit"
-    	if [ $? -ne 0 ]; then
-	    	echo;echo "Conflict occurred while applying commit $commit. \
-			Resolve the conflict and enter 'done' to continue."
-        	while true; do
-            		read command
-            		if [ "$command" == "done" ]; then
-                		break
-            		else
-				eval $command
-            		fi
-        	done
-    	fi
-    	echo "Commit $commit successfully applied...."
+	echo "Applying commit $commit ...."
+	git cherry-pick -x "$commit"
+	while true; 
+	do
+		if [$? -ne 0 ];then
+			echo;echo "Conflict occurred while applying commit $commit. \
+				\nResolve the conflict and enter 'done' to continue."
+			bash
+			if [$? -ne 0 ];then
+				git add -u ; git cherry-pick --continue
+			else 
+				git cherry-pick --abort
+			fi
+		else 
+			break
+		fi
+	done
+	echo "Commit $commit successfully applied...."
 done
+
+#Remove alias 
+sed -i "/$ALIASLINE/d" $BASHFILE
 
 # Display a completion message
 echo "All commits have been processed."

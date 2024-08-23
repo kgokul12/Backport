@@ -60,7 +60,6 @@ for bpcmid, name  in zip(bpcmids[::-1], names[::-1]):
         #file.write(result.stdout)
         upcmid = grep_result.stdout.strip().split(' ')
         upcmid = upcmid[1]
-        print(f"{upcmid}")
     except subprocess.CalledProcessError as e:
         print(f"Error running git log: {e.stderr}")
     
@@ -79,7 +78,7 @@ for bpcmid, name  in zip(bpcmids[::-1], names[::-1]):
 with open("/home/amd/commits.html", "w") as file:
     file.write(html_content)
 
-print("HTML file with hyperlinks created.")
+print("HTML file with hyperlinks created in /home/amd/commits.html.")
 
 
 
