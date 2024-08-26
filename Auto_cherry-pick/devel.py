@@ -9,9 +9,12 @@ import tempfile
 tmpfile = "/tmp/commits"
 applied = "/tmp/applied"
 sorted_file = "/tmp/sorted"
+acp_log = "/home/amd/acp_log"
 
 sorted_commits=[]
 applied_commits=[]
+Sign_off_flag = False
+Continue_flag = False
 
 def Run_command(command):
     """Run a shell command and handle errors."""
@@ -25,15 +28,44 @@ def Run_command(command):
 def Sig_catch(signum, frame):
     print("Processing Interrupt...")
     Run_command("git cherry-pick --abort")
-    if os.path.exists("$PWD/.git/.COMMIT_EDITMSG.swp"):
-        os.remove("$PWD/.git/.COMMIT_EDITMSG.swp")
-    Run_command(f"git config core.editor 'vi'")
+    Reset_editor()
     print("cherry-pick aborted...")
     sys.exit(1)
 
+def Trap_signals():
+    # Trapping signal SIGINT and SIGTERM
+    signal.signal(signal.SIGINT, Sig_catch)
+    signal.signal(signal.SIGTERM, Sig_catch)
+
+def Release_signals():
+    # Untrap the signals by resetting them to default behavior
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+def Change_core_editor():
+    global temp_script_path 
+    # Create a temporary script to simulate an automated editor
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.sh', mode='w') as temp_script:
+            temp_script.write("#!/bin/bash\nexit\n")
+            temp_script_path = temp_script.name
+
+    # Make the temporary script executable
+    os.chmod(temp_script_path, 0o755)
+
+    Run_command(f"git config core.editor {temp_script_path}")
+
+def Reset_editor():
+    #Reset editor back to "vim"
+    if os.path.exists("$PWD/.git/.COMMIT_EDITMSG.swp"):
+        os.remove("$PWD/.git/.COMMIT_EDITMSG.swp")
+    Run_command(f"git config core.editor 'vi'")
+    os.remove(temp_file_path)
+    os.remove(temp_script_path)
+
 #add commit upstream message.
 def Add_upstream_msg(commit):
-    if len(sys.argv) > 1 and sys.argv[1] == "-s":
+    global temp_file_path
+    if Sign_off_flag:
         # Run `git commit --amend -s`
         print("Adding sign-off content...")
         Run_command("git commit --amend -s")
@@ -58,28 +90,8 @@ def Add_upstream_msg(commit):
     print("Adding upstream commit message...")
     Run_command(f"git commit --amend --file={temp_file_path}")
 
-# Definition to check the commit is already applied ot not
-def Check_commit_status(commit, count):
-    if commit == applied_commits[count]:
-        # if commit already applied in order skip and return -1 
-        return -1
-    else :
-        # Return the value to reset...
-        return len(applied_commits) - count
-
-def Change_core_editor():
-    # Create a temporary script to simulate an automated editor
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.sh', mode='w') as temp_script:
-            temp_script.write("#!/bin/bash\nexit\n")
-            temp_script_path = temp_script.name
-
-    # Make the temporary script executable
-    os.chmod(temp_script_path, 0o755)
-
-    Run_command(f"git config core.editor {temp_script_path}")
-
-def Get_commit_input(commits):
-
+def Get_commit_input():
+    commits=[]
     # Read multiple lines of commit IDs into the 'commits' list
     print("Enter the commit IDs (one per line). Press Ctrl+D when done:")
     try:
@@ -92,15 +104,15 @@ def Get_commit_input(commits):
         
     with open(tmpfile, "w") as f:
         for commit in commits:
-            f.write(f"grep -n {commit} /home/amd/acp_log\n")
+            f.write(f"grep -n {commit} {acp_log}\n")
 
-def Process_commits(commits):
+def Process_commits():
     global sorted_commits, applied_commits
     # Sort and unique the commit IDs, then prepare the grep commands
-    if not os.path.exists("/home/amd/acp_log"):
-        print("\nMake a log copy of kernel latest version in Home as acp_log")
+    if not os.path.exists(acp_log):
+        print(f"\nMake a log copy of kernel latest version in Home as {acp_log}")
         print("    eg : checkout to kernel master branch ")
-        print("         git log --pretty=oneline > /home/amd/acp_log")
+        print(f"         git log --pretty=oneline > {acp_log}")
         sys.exit(1)
 
     os.chmod(tmpfile, 0o755)
@@ -110,11 +122,12 @@ def Process_commits(commits):
         print("No commits to process.. May be a invalid commit id")
         sys.exit(1)
 
+    commits = sorted(set(grep_output.stdout.splitlines()), reverse=True)
+    
     # Save the output to a file
     with open(sorted_file, "w") as output_file:
-        output_file.write(grep_output.stdout)
-
-    commits = sorted(set(grep_output.stdout.splitlines()), reverse=True)
+        for commit in commits:
+            output_file.write(f"{commit}\n")
     
     for line in commits:
             sorted_commits.append(line.split(':')[1].split()[0])
@@ -125,32 +138,35 @@ def Process_commits(commits):
         cat_output = subprocess.run(["cat", applied], stdout=subprocess.PIPE, universal_newlines=True)
         applied_commits = cat_output.stdout.splitlines()
 
-def Trap_signals():
-    # Trapping signal SIGINT and SIGTERM
-    signal.signal(signal.SIGINT, Sig_catch)
-    signal.signal(signal.SIGTERM, Sig_catch)
+# Definition to check the commit is already applied ot not
+def Check_commit_status(commit, count):
+    if commit in applied_commits and commit == applied_commits[count]:
+        # if commit already applied in order skip and return -1 
+        return -1
+    else :
+        # Return the value to reset...
+        return len(applied_commits) - count
 
 def Apply_commits():
     # Applying the commits
     count = 0
     check_val = -1
     for commit in sorted_commits:
-        if check_val == -1 and os.path.exists(applied):
-            check_val = Check_commit_status(commit,count)
+        if check_val == -1:
+            check_val = Check_commit_status(commit, count)
             if check_val == -1:
-                count+=1
+                count += 1
                 continue
             else:
-                print(f"==> git reset --hard HEAD~{check_val}")
+                print(f"git reset --hard HEAD~{check_val}")
                 Run_command(f"git reset --hard HEAD~{check_val}")
-        else:
-            check_val = 0
-            
+                check_val  = 0
+                
         print(f" --> Applying commit {commit} ....")
         result = subprocess.run(["git", "cherry-pick", commit])
         print(result.returncode)
-        while result.returncode != 0:
-            print(f"\nConflict occurred while applying commit {commit}.")
+        if result.returncode != 0:
+            print(f"\nConflict occurred while applying commit {commit}")
             print("Resolve the conflict and enter \n'done' / 'd' --> continue \n'abort' / 'a' --> cancel \n'bash' / 'b' --> open bash\n")
 
             try:
@@ -163,6 +179,7 @@ def Apply_commits():
                     elif user_input == "abort" or user_input == 'a':
                         if os.path.exists("$PWD/.git/.COMMIT_EDITMSG.swp"):
                             os.remove("$PWD/.git/.COMMIT_EDITMSG.swp")
+                        Reset_editor()
                         Run_command(f"git config core.editor 'vi'")
                         Run_command("git cherry-pick --abort")
                         sys.exit(1)
@@ -173,58 +190,72 @@ def Apply_commits():
                         print("Invalid input...")
             except EOFError:
                 break
-            break
         print(f"Commit {commit} successfully applied....")
-        add_upstream_msg(commit)
+        Add_upstream_msg(commit)
         Run_command(f"echo {commit} >> {applied}")
-
+                
     # Display a completion message
     print("All commits have been processed.")
-
-def Reset_editor():
-    #Reset editor back to "vim"
-    if os.path.exists("$PWD/.git/.COMMIT_EDITMSG.swp"):
-        os.remove("$PWD/.git/.COMMIT_EDITMSG.swp")
-    Run_command(f"git config core.editor 'vi'")
 
 def Cleanup():
     # Clean up the temporary files
     os.remove(tmpfile)
     os.remove(sorted_file)
-    os.remove(applied)
-    os.remove(temp_file_path)
+    if os.path.exists(applied):
+        os.remove(applied)
+    if os.path.exists(temp_file_path):
+        os.remove(temp_file_path)
     os.remove(temp_script_path)
-
-def Release_signals():
-    # Untrap the signals by resetting them to default behavior
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-    signal.signal(signal.SIGTERM, signal.SIG_DFL)
-
+    
 def Call_options():
-    # clean all the applied commits 
-    if sys.argv[1] == "--reset" or sys.argv[1] == "-r" or sys.argv[1] == "-ra":
-        if sys.argv[1] == "-ra" or sys.argv[2] == "all":
+    global Sign_off_flag, Continue_flag
+    
+    if sys.argv[1] in ["--reset", "-r", "-ra"]:
+        if sys.argv[1] in ["-ra", "--reset"] and len(sys.argv) > 2 and sys.argv[2] == "all":
             if os.path.exists(applied):
                 with open(applied, 'r') as file:
                     count = sum(1 for line in file)
                 print(f"==> git reset --hard HEAD~{count}")
                 Run_command(f"git reset --hard HEAD~{count}")
-                print("cleaning all Applied commits")
+                print("Cleaning all applied commits")
                 os.remove(applied)
             sys.exit(0)
-        else :
-            print(f"==> git reset --hard HEAD~{int(sys.argv[2])}")
-            Run_command(f"git reset --hard HEAD~{int(sys.argv[2])}")
-                    
-    # show list of commits with order
-    elif sys.argv[1] == "--list" or sys.argv[1] == "-l":
-        print("The list of commits in QUEUE are:")
+        else:
+            try:
+                # Try to convert sys.argv[2] to an integer
+                reset_value = int(sys.argv[2])
+                print(f"==> git reset --hard HEAD~{reset_value}")
+                Run_command(f"git reset --hard HEAD~{reset_value}")
+            except ValueError:
+                # If conversion fails, it's not an integer, so treat it as a commit hash
+                print(f"==> git reset --hard {sys.argv[2]}")
+                Run_command(f"git reset --hard {sys.argv[2]}")
+            sys.exit(0)
+
+    elif sys.argv[1] in ["--status", "-s"]:
+        if not os.path.exists(sorted_file):
+            print("Nothing in list to show")
+            sys.exit(0)
+        print("\nThe list of commits in QUEUE are:\n")
         Run_command(f"cat {sorted_file}")
+        if not os.path.exists(applied):
+            print("\nNo commits applied yet\n")
+            sys.exit(0)
+        print("\nThe list of commits already applied:\n")
+        Run_command(f"cat {applied}")
         sys.exit(0)
-            
-    # To clean the tmpfiles to start new set of patches
-    elif sys.argv[1] == "--clean" or sys.argv[1] == "-c":
-        # Clean up the temporary files
+
+    elif sys.argv[1] in ["--list", "-l"]:
+        Process_commits()
+        if os.path.exists(sorted_file):
+            print("The list of commits in QUEUE are:")
+            Run_command(f"cat {sorted_file}")
+            sys.exit(0)
+        else:
+            print("Nothing added to list")
+            sys.exit(1)
+
+    elif sys.argv[1] in ["--clean", "-c"]:
         if os.path.exists(tmpfile):
             os.remove(tmpfile)
         if os.path.exists(sorted_file):
@@ -233,34 +264,55 @@ def Call_options():
             os.remove(applied)
         print("Cleaning done successfully..")
         sys.exit(0)
-       
-    # To add any found dependent commit
-    elif sys.argv[1] == "--add" or sys.argv[1] == "-a":
+
+    elif sys.argv[1] in ["--add", "-a"]:
         if len(sys.argv) < 3:
-            print("Add commit id too")
+            print("Add commit id:")
             print("    Eg : acp -a <commit id1> <commit id2> <commit id3>...")
             sys.exit(1)
-        for i in range(2, len(sys.argv)+1):
-            Run_command(f"echo {sys.argv[i]} >> {tmpfile}")
-            i+=1
+        for i in range(2, len(sys.argv)):
+            Run_command(f"echo \"grep -n {sys.argv[i]} {acp_log}\" >> {tmpfile}")
         print("Added successfully to list....")
         sys.exit(0)
+
+    elif sys.argv[1] in ["--signoff", "-S"]:
+        Sign_off_flag = True
+
+    elif sys.argv[1] in ["--continue", "-C"]:
+        Continue_flag = True
         
-    else :
-        print("Invalid option..")
+    elif sys.argv[1] == "--help" or sys.argv[1] == "-h":
+        print("     acp [optoins] (-s, -l, -c, -r)")
+        print("     acp [options] <commit> (-a)")
+        print("         -s or --status   --> to check the status of applied commits and list of commits in order")
+        print("         -S or --Signoff  --> to add signoff message to the commit log")
+        print("         -l or --list     --> to check the list of ordered commit ids")
+        print("         -c or --clean    --> to clear of logs of cherry-pick")
+        print("         -C or --continue    --> to clear of logs of cherry-pick")
+        print("         -r or --reset    --> to reset the logs")
+        print("                          --> -ra or --reset all to reset all the applied commits")
+        print("         -a or -add       --> to add a commit id to the list")
+        
+    else:
+        print("Invalid option... See help")
         sys.exit(1)
-        
-def main():
-    if len(sys.argv) > 0 and not sys.argv[1] == "-s":
-        call_options()
+   
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        Call_options()
 
-    # Initialize a list to hold the commit IDs
-    commits = []
-    #get input commits, process, sort and save into sorted_commits...
-    Get_commit_input(commits)
-    
-    Process_commits(commits)
-
+    if Continue_flag:
+        if not os.path.exists(tmpfile):
+            print("Add input commits first...")
+            #get input commits, process, sort and save into sorted_commits...
+            Get_commit_input()
+        else :                
+            Process_commits()
+    else :
+        #get input commits, process, sort and save into sorted_commits...
+        Get_commit_input()
+        Process_commits()
+      
     Trap_signals()
 
     Change_core_editor()
@@ -272,7 +324,4 @@ def main():
     Release_signals()
 
     Cleanup()
-
-if __name__ == "__main__":
-    main()
 
