@@ -10,10 +10,11 @@ tmpfile = "/tmp/commits"
 applied = "/tmp/applied"
 sorted_file = "/tmp/sorted"
 acp_log = "/home/amd/acp_log"
+temp_file_path = "/tmp/tmp_file"
+temp_script_path = "/tmp/tmp_script.sh"
 
 sorted_commits=[]
 applied_commits=[]
-Sign_off_flag = False
 Continue_flag = False
 
 def Run_command(command):
@@ -45,7 +46,7 @@ def Release_signals():
 def Change_core_editor():
     global temp_script_path 
     # Create a temporary script to simulate an automated editor
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.sh', mode='w') as temp_script:
+    with open(temp_script_path,'w') as temp_script:
             temp_script.write("#!/bin/bash\nexit\n")
             temp_script_path = temp_script.name
 
@@ -59,16 +60,13 @@ def Reset_editor():
     if os.path.exists("$PWD/.git/.COMMIT_EDITMSG.swp"):
         os.remove("$PWD/.git/.COMMIT_EDITMSG.swp")
     Run_command(f"git config core.editor 'vi'")
-    os.remove(temp_file_path)
+    if os.path.exists(temp_file_path):
+        os.remove(temp_file_path)
     os.remove(temp_script_path)
 
 #add commit upstream message.
 def Add_upstream_msg(commit):
     global temp_file_path
-    if Sign_off_flag:
-        # Run `git commit --amend -s`
-        print("Adding sign-off content...")
-        Run_command("git commit --amend -s")
 
     # Modify the commit message to include the SHA_ID and additional text
     commit_message = subprocess.check_output("git log -1 --pretty=%B", shell=True, universal_newlines=True).strip()
@@ -82,7 +80,7 @@ def Add_upstream_msg(commit):
     new_commit_message = f"{first_line}\n\ncommit {commit} upstream\n\n{rest_of_message}"
 
     # Write the new commit message to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, mode='w') as temp_file:
+    with open(temp_file_path, mode='w') as temp_file:
         temp_file.write(new_commit_message)
         temp_file_path = temp_file.name
 
@@ -102,9 +100,13 @@ def Get_commit_input():
     except EOFError:
         pass
         
-    with open(tmpfile, "w") as f:
+    if os.path.exists(tmpfile):
         for commit in commits:
-            f.write(f"grep -n {commit} {acp_log}\n")
+            Run_command(f"echo \"grep -n {commit} {acp_log}\" >> {tmpfile}")
+    else:
+        with open(tmpfile, "w") as f:
+            for commit in commits:
+                f.write(f"grep -n {commit} {acp_log}\n")
 
 def Process_commits():
     global sorted_commits, applied_commits
@@ -117,12 +119,12 @@ def Process_commits():
 
     os.chmod(tmpfile, 0o755)
 
-    grep_output = subprocess.run(["bash", tmpfile], stdout=subprocess.PIPE, universal_newlines=True)
+    grep_output = subprocess.run(f"{tmpfile} | sort -ugr", stdout=subprocess.PIPE, universal_newlines=True, shell=True)
     if not grep_output.stdout.strip():
         print("No commits to process.. May be a invalid commit id")
         sys.exit(1)
 
-    commits = sorted(set(grep_output.stdout.splitlines()), reverse=True)
+    commits = grep_output.stdout.splitlines()
     
     # Save the output to a file
     with open(sorted_file, "w") as output_file:
@@ -199,19 +201,22 @@ def Apply_commits():
 
 def Cleanup():
     # Clean up the temporary files
-    os.remove(tmpfile)
-    os.remove(sorted_file)
+    if os.path.exists(tmpfile):
+        os.remove(tmpfile)
+    if os.path.exists(sorted_file):
+        os.remove(sorted_file)
     if os.path.exists(applied):
         os.remove(applied)
     if os.path.exists(temp_file_path):
         os.remove(temp_file_path)
-    os.remove(temp_script_path)
+    if os.path.exists(temp_script_path):
+        os.remove(temp_script_path)
     
 def Call_options():
     global Sign_off_flag, Continue_flag
     
-    if sys.argv[1] in ["--reset", "-r", "-ra"]:
-        if sys.argv[1] in ["-ra", "--reset"] and len(sys.argv) > 2 and sys.argv[2] == "all":
+    if sys.argv[1] in ["reset", "-r"]:
+        if sys.argv[1] in ["-r", "reset"] and len(sys.argv) > 2 and sys.argv[2] in ["all", "a"]:
             if os.path.exists(applied):
                 with open(applied, 'r') as file:
                     count = sum(1 for line in file)
@@ -231,8 +236,9 @@ def Call_options():
                 print(f"==> git reset --hard {sys.argv[2]}")
                 Run_command(f"git reset --hard {sys.argv[2]}")
             sys.exit(0)
+            # change in applied_file pending....
 
-    elif sys.argv[1] in ["--status", "-s"]:
+    elif sys.argv[1] in ["status", "-s"]:
         if not os.path.exists(sorted_file):
             print("Nothing in list to show")
             sys.exit(0)
@@ -245,53 +251,55 @@ def Call_options():
         Run_command(f"cat {applied}")
         sys.exit(0)
 
-    elif sys.argv[1] in ["--list", "-l"]:
-        Process_commits()
-        if os.path.exists(sorted_file):
+    elif sys.argv[1] in ["list", "-l"]:
+        if not os.path.exists(sorted_file) and not os.path.exists(tmpfile):
+            print("Nothing added to list")
+            sys.exit(1)
+        else :
+            Process_commits()
             print("The list of commits in QUEUE are:")
             Run_command(f"cat {sorted_file}")
             sys.exit(0)
-        else:
-            print("Nothing added to list")
-            sys.exit(1)
 
-    elif sys.argv[1] in ["--clean", "-c"]:
-        if os.path.exists(tmpfile):
-            os.remove(tmpfile)
-        if os.path.exists(sorted_file):
-            os.remove(sorted_file)
-        if os.path.exists(applied):
-            os.remove(applied)
+    elif sys.argv[1] in ["clean", "-cl"]:
+        Cleanup()
         print("Cleaning done successfully..")
         sys.exit(0)
 
-    elif sys.argv[1] in ["--add", "-a"]:
-        if len(sys.argv) < 3:
-            print("Add commit id:")
-            print("    Eg : acp -a <commit id1> <commit id2> <commit id3>...")
-            sys.exit(1)
-        for i in range(2, len(sys.argv)):
-            Run_command(f"echo \"grep -n {sys.argv[i]} {acp_log}\" >> {tmpfile}")
+    elif sys.argv[1] in ["add", "-a"]:
+        Get_commit_input()
         print("Added successfully to list....")
         sys.exit(0)
 
-    elif sys.argv[1] in ["--signoff", "-S"]:
-        Sign_off_flag = True
+    elif sys.argv[1] in ["signoff", "-S"]:
+        # Run `git commit --amend -s`
+        print("Adding sign-off content...")
+        try:
+            # Try to convert sys.argv[2] to an integer
+            reset_value = int(sys.argv[2])
+            print(f"==> git rebase --signoff HEAD~{reset_value}")
+            Run_command(f"git rebase --signoff HEAD~{reset_value}")
+        except ValueError:
+            # If conversion fails, it's not an integer, so treat it as a commit hash
+            print(f"==> git rebase --signoff {sys.argv[2]}")
+            Run_command(f"git rebase --signoff {sys.argv[2]}")
+        sys.exit(0)
 
-    elif sys.argv[1] in ["--continue", "-C"]:
+    elif sys.argv[1] in ["continue", "-c"]:
         Continue_flag = True
         
     elif sys.argv[1] == "--help" or sys.argv[1] == "-h":
-        print("     acp [optoins] (-s, -l, -c, -r)")
-        print("     acp [options] <commit> (-a)")
-        print("         -s or --status   --> to check the status of applied commits and list of commits in order")
-        print("         -S or --Signoff  --> to add signoff message to the commit log")
-        print("         -l or --list     --> to check the list of ordered commit ids")
-        print("         -c or --clean    --> to clear of logs of cherry-pick")
-        print("         -C or --continue    --> to clear of logs of cherry-pick")
-        print("         -r or --reset    --> to reset the logs")
+        print("     acp [options] (-l, -c, -r, -a)")
+        print("     acp [options] <count/commit> (-s)")
+        print("         -s or status   --> to check the status of applied commits and list of commits in order")
+        print("         -S or Signoff  --> to add signoff message to the commit log")
+        print("         -l or list     --> to check the list of ordered commit ids")
+        print("         -cl or clean    --> to clear of logs of cherry-pick")
+        print("         -c or continue    --> to clear of logs of cherry-pick")
+        print("         -r or reset    --> to reset the logs")
         print("                          --> -ra or --reset all to reset all the applied commits")
-        print("         -a or -add       --> to add a commit id to the list")
+        print("         -a or add       --> to add a commit id to existing list, to create a new list use -c first and then use -a")
+        sys.exit(0)
         
     else:
         print("Invalid option... See help")
