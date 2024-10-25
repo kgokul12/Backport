@@ -44,7 +44,7 @@ def Release_signals():
     signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
 def Change_core_editor():
-    global temp_script_path 
+    global temp_script_path
     # Create a temporary script to simulate an automated editor
     with open(temp_script_path,'w') as temp_script:
             temp_script.write("#!/bin/bash\nexit\n")
@@ -99,7 +99,7 @@ def Get_commit_input():
                 commits.append(line)
     except EOFError:
         pass
-        
+
     if os.path.exists(tmpfile):
         for commit in commits:
             Run_command(f"echo \"grep -n {commit} {acp_log}\" >> {tmpfile}")
@@ -125,12 +125,12 @@ def Process_commits():
         sys.exit(1)
 
     commits = grep_output.stdout.splitlines()
-    
+
     # Save the output to a file
     with open(sorted_file, "w") as output_file:
         for commit in commits:
             output_file.write(f"{commit}\n")
-    
+
     for line in commits:
             sorted_commits.append(line.split(':')[1].split()[0])
     print("Commits sorted....")
@@ -143,7 +143,7 @@ def Process_commits():
 # Definition to check the commit is already applied ot not
 def Check_commit_status(commit, count):
     if commit in applied_commits and commit == applied_commits[count]:
-        # if commit already applied in order skip and return -1 
+        # if commit already applied in order skip and return -1
         return -1
     else :
         # Return the value to reset...
@@ -163,7 +163,7 @@ def Apply_commits():
                 print(f"git reset --hard HEAD~{check_val}")
                 Run_command(f"git reset --hard HEAD~{check_val}")
                 check_val  = 0
-                
+
         print(f" --> Applying commit {commit} ....")
         result = subprocess.run(["git", "cherry-pick", commit])
         print(result.returncode)
@@ -195,10 +195,55 @@ def Apply_commits():
         print(f"Commit {commit} successfully applied....")
         Add_upstream_msg(commit)
         Run_command(f"echo {commit} >> {applied}")
-                
+
     # Display a completion message
     print("All commits have been processed.")
 
+def Check_commit_diff():
+    # Local function Process diff
+    def Process_diff(bp_commit,file_no):
+        # check bp_commit
+        result = subprocess.run(f"git show {bp_commit} > {file_no}b",stdout=subprocess.PIPE, shell=True, universal_newlines=True)
+        grep_out = subprocess.run(f"grep upstream {file_no}b", stdout=subprocess.PIPE, shell=True, universal_newlines=True)
+        if not grep_out.stdout:
+            print(f"==> For {bp_commit} --> no Upstream id is there")
+            print(f"Check commit message of {bp_commit} or check the repo")
+            return 1
+
+        up_commit = grep_out.stdout.strip().split()[1]
+        result = subprocess.run(f"git show {up_commit}", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+        if not result.stdout:
+            print(f"==> For {bp_commit} --> no Upstream id is there")
+            print(f"Check commit message of {bp_commit} or check the repo")
+            return 1
+
+        with open (f"{file_no}u",'w') as file:
+            file.write(result.stdout)
+        print(f"==> Compare {bp_commit} | {up_commit[:14]} :: diff {file_no}b {file_no}u")
+    # Local function Process_diff ends here
+
+    if len(sys.argv) < 3:
+        print("Add commit id you want to check diff or give count to check the list of diffs")
+        sys.exit(1)
+    try:
+        value = int(sys.argv[2])
+        print("Checking diff for the following commits")
+        result=subprocess.run(f"git log --oneline -{value}", stdout=subprocess.PIPE, shell=True, universal_newlines=True)
+        print(result.stdout)
+        logs = result.stdout.splitlines()
+        bp_commits = []
+        for log in logs:
+            bp_commits.append(log.split()[0])
+        file_no=1
+        for bp_commit in bp_commits[::-1]:
+            if Process_diff(bp_commit,file_no):
+                continue
+            file_no += 1
+
+    except ValueError:
+        # if commit is given as input
+       Process_diff(sys.argv[2],1)    
+    
 def Cleanup():
     # Clean up the temporary files
     if os.path.exists(tmpfile):
@@ -211,10 +256,21 @@ def Cleanup():
         os.remove(temp_file_path)
     if os.path.exists(temp_script_path):
         os.remove(temp_script_path)
-    
+    i=1
+    while True:
+        if os.path.exists(f"./{i}b"):
+            os.remove(f"./{i}b")
+        else :
+            break
+        if os.path.exists(f"./{i}u"):
+            os.remove(f"./{i}u")
+        else :
+            break
+        i+=1
+
 def Call_options():
-    global Sign_off_flag, Continue_flag
-    
+    global Continue_flag
+
     if sys.argv[1] in ["reset", "-r"]:
         if sys.argv[1] in ["-r", "reset"] and len(sys.argv) > 2 and sys.argv[2] in ["all", "a"]:
             if os.path.exists(applied):
@@ -270,6 +326,10 @@ def Call_options():
         Get_commit_input()
         print("Added successfully to list....")
         sys.exit(0)
+        
+    elif sys.argv[1] in ["diff", "-d"]:
+        Check_commit_diff()
+        sys.exit(0)
 
     elif sys.argv[1] in ["signoff", "-S"]:
         # Run `git commit --amend -s`
@@ -287,24 +347,25 @@ def Call_options():
 
     elif sys.argv[1] in ["continue", "-c"]:
         Continue_flag = True
-        
+
     elif sys.argv[1] == "--help" or sys.argv[1] == "-h":
         print("     acp [options] (-l, -c, -r, -a)")
         print("     acp [options] <count/commit> (-s)")
         print("         -s or status   --> to check the status of applied commits and list of commits in order")
-        print("         -S or Signoff  --> to add signoff message to the commit log")
+        print("         -S or Signoff  --> to add signoff message to the commit log \"acp -S <count/commit_id>\"")
         print("         -l or list     --> to check the list of ordered commit ids")
-        print("         -cl or clean    --> to clear of logs of cherry-pick")
-        print("         -c or continue    --> to clear of logs of cherry-pick")
+        print("         -cl or clean   --> to clear of logs of cherry-pick")
+        print("         -c or continue --> to clear of logs of cherry-pick")
         print("         -r or reset    --> to reset the logs")
-        print("                          --> -ra or --reset all to reset all the applied commits")
-        print("         -a or add       --> to add a commit id to existing list, to create a new list use -c first and then use -a")
+        print("                        --> -r all or --reset all to reset all the applied commits")
+        print("         -a or add      --> to add a commit id to existing list, to create a new list use -c first and then use -a")
+        print("         -d or diff     --> to reset the logs")
         sys.exit(0)
-        
+
     else:
         print("Invalid option... See help")
         sys.exit(1)
-   
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         Call_options()
@@ -314,13 +375,13 @@ if __name__ == "__main__":
             print("Add input commits first...")
             #get input commits, process, sort and save into sorted_commits...
             Get_commit_input()
-        else :                
+        else :
             Process_commits()
     else :
         #get input commits, process, sort and save into sorted_commits...
         Get_commit_input()
         Process_commits()
-      
+
     Trap_signals()
 
     Change_core_editor()
@@ -332,4 +393,3 @@ if __name__ == "__main__":
     Release_signals()
 
     Cleanup()
-
