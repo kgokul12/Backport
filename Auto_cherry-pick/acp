@@ -220,6 +220,13 @@ def Check_commit_diff():
         with open (f"{file_no}u",'w') as file:
             file.write(result.stdout)
         print(f"==> Compare {bp_commit} | {up_commit[:14]} :: diff {file_no}b {file_no}u")
+        
+        result = subprocess.run(f"diff {file_no}b {file_no}u | grep -e '> +' -e '> -' -e '< +' -e '< -'", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+        diff = result.stdout.strip() or "!* no diff"
+        if diff != "!* no diff":
+            result = subprocess.run(f"grep -e 'Backport changes' -e 'Backport Changes' {file_no}b", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+            print(f"Deviaton explaination : {'Yes' if result.stdout else 'No'}")
+        print(diff)
     # Local function Process_diff ends here
 
     if len(sys.argv) < 3:
