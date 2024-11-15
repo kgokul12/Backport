@@ -354,19 +354,35 @@ def Call_options():
 
     elif sys.argv[1] in ["continue", "-c"]:
         Continue_flag = True
+        
+    elif sys.argv[1] == "update":
+        Run_command(f"wget -P /tmp -q https://raw.githubusercontent.com/kgokul12/Backport/main/Auto_cherry-pick/acp")
+        if os.path.exists("/tmp/acp"):
+            diff = subprocess.run(f"diff /tmp/acp /usr/bin/acp",stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
+            if diff.stdout :
+                Run_command("sudo cp /tmp/acp /usr/bin/acp")
+                print("!Update successfull...")
+                os.remove("/tmp/acp")
+            else :
+                print("!Already up to date...")
+            Run_command("acp -h")
+            sys.exit(0)
+        print("Some problem with updating check after sometimes..")
+        sys.exit(0)
 
     elif sys.argv[1] == "--help" or sys.argv[1] == "-h":
         print("     acp [options] (-l, -c, -r, -a)")
         print("     acp [options] <count/commit> (-s)")
-        print("         -s or status   --> to check the status of applied commits and list of commits in order")
-        print("         -S or Signoff  --> to add signoff message to the commit log \"acp -S <count/commit_id>\"")
+        print("         -a or add      --> to add a commit id to existing list, to create a new list use -c first and then use -a")
         print("         -l or list     --> to check the list of ordered commit ids")
-        print("         -cl or clean   --> to clear of logs of cherry-pick")
         print("         -c or continue --> to clear of logs of cherry-pick")
         print("         -r or reset    --> to reset the logs")
-        print("                        --> -r all or --reset all to reset all the applied commits")
-        print("         -a or add      --> to add a commit id to existing list, to create a new list use -c first and then use -a")
-        print("         -d or diff     --> to reset the logs")
+        print("                        --> -r all or --reset all to reset all acp applied commits")
+        print("         -s or status   --> to check the status of applied commits and list of commits in order")
+        print("         -S or Signoff  --> to add signoff message to the commit log \"acp -S <count/commit_id>\"")
+        print("         -d or diff     --> to check the diff of a backported patch")
+        print("         update         --> to update your script")
+        print("         -cl or clean   --> to clear of logs of cherry-pick")
         sys.exit(0)
 
     else:
