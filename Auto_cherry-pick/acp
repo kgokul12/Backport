@@ -115,6 +115,7 @@ def Process_commits():
         print(f"\nMake a log copy of kernel latest version in Home as {acp_log}")
         print("    eg : checkout to kernel master branch ")
         print(f"         git log --pretty=oneline > {acp_log}")
+        print(f"   (or) run acp log (or) acp -lg to create log file")
         sys.exit(1)
 
     os.chmod(tmpfile, 0o755)
@@ -355,7 +356,7 @@ def Call_options():
     elif sys.argv[1] in ["continue", "-c"]:
         Continue_flag = True
         
-    elif sys.argv[1] == "update":
+    elif sys.argv[1] in ["update", "-u"]:
         Run_command(f"wget -P /tmp -q https://raw.githubusercontent.com/kgokul12/Backport/main/Auto_cherry-pick/acp")
         if os.path.exists("/tmp/acp"):
             diff = subprocess.run(f"diff /tmp/acp /usr/bin/acp",stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
@@ -369,6 +370,20 @@ def Call_options():
             sys.exit(0)
         print("Some problem with updating check after sometimes..")
         sys.exit(0)
+    
+    elif sys.argv[1] in ["log", "-lg"]:
+        repo = input("Enter the repo link you want to take log from : ")
+        branch = input("Enter the name of the branch : ")
+        dir = "/tmp/tmp_repo"
+        if os.path.exists(dir):
+            Run_command(f"rm -rf {dir}")
+        print(f"git clone --single-branch -b {branch} {repo} {dir} -j10")
+        print("!Downloading repo.....")
+        Run_command(f"git clone --single-branch -b {branch} {repo} {dir} -j10")
+        print("!Updating log.....")
+        Run_command(f"git -C {dir} log --pretty=oneline {branch} > {acp_log}")
+        print("log updated successfully to {acp_log}")
+        sys.exit(0)
 
     elif sys.argv[1] == "--help" or sys.argv[1] == "-h":
         print("     acp [options] (-l, -c, -r, -a)")
@@ -381,7 +396,8 @@ def Call_options():
         print("         -s or status   --> to check the status of applied commits and list of commits in order")
         print("         -S or Signoff  --> to add signoff message to the commit log \"acp -S <count/commit_id>\"")
         print("         -d or diff     --> to check the diff of a backported patch")
-        print("         update         --> to update your script")
+        print("         -u or update   --> to update your script")
+        print("         -lg or log     --> to update your script")
         print("         -cl or clean   --> to clear of logs of cherry-pick")
         sys.exit(0)
 
