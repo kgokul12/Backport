@@ -11,7 +11,7 @@ def check_commit(cmid):
     short_cmid = cmid[:12]
 
     # Check for dependencies using `--grep`
-    deps_result = subprocess.run(f"git log origin/stable_kernel_6.15 --oneline --grep=\"Fixes: {short_cmid}\"", stdout=subprocess.PIPE, shell=True, universal_newlines=True)
+    deps_result = subprocess.run(f"git log origin/stable_kernel_6.15 --oneline --grep=\"{short_cmid}\"", stdout=subprocess.PIPE, shell=True, universal_newlines=True)
     deps_output = deps_result.stdout.strip() or "no deps"
     return f"==>checking {short_cmid}\n{deps_output}"
 
